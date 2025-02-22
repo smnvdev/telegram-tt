@@ -17,6 +17,7 @@ import { selectCanPlayAnimatedEmojis, selectDraft, selectIsInSelectMode } from '
 import buildClassName from '../../../util/buildClassName';
 import captureKeyboardListeners from '../../../util/captureKeyboardListeners';
 import { getIsDirectTextInputDisabled } from '../../../util/directInputManager';
+import { Editor } from '../../../util/editor';
 import parseEmojiOnlyString from '../../../util/emoji/parseEmojiOnlyString';
 import focusEditableElement from '../../../util/focusEditableElement';
 import { debounce } from '../../../util/schedulers';
@@ -32,6 +33,7 @@ import useFlag from '../../../hooks/useFlag';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 import useInputCustomEmojis from './hooks/useInputCustomEmojis';
+import { useUndoManager } from './hooks/useUndoManager';
 
 import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
@@ -178,6 +180,9 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   const isMobileDevice = isMobile && (IS_IOS || IS_ANDROID);
 
   const [shouldDisplayTimer, setShouldDisplayTimer] = useState(false);
+
+  const handleUpdate = (html: string) => onUpdate(html === SAFARI_BR ? '' : html);
+  const { undo, redo, record } = useUndoManager(inputRef, handleUpdate);
 
   useEffect(() => {
     setShouldDisplayTimer(Boolean(timedPlaceholderLangKey && timedPlaceholderDate));
@@ -407,17 +412,29 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         closeTextFormatter();
         onSend();
       }
+    } else if (!isComposing && (e.key === 'Delete' || e.key === 'Backspace')) {
+      Editor.mergeWithBlockquote();
+    } else if (!isComposing && e.key === 'Enter' && e.shiftKey) {
+      if (Editor.correctNewLine()) {
+        e.preventDefault();
+        e.currentTarget.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     } else if (!isComposing && e.key === 'ArrowUp' && !html && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       editLastMessage();
+    } else if (!isComposing && (e.metaKey || e.ctrlKey) && (e.code === 'KeyZ' || e.code === 'KeyY')) {
+      if (e.code === 'KeyZ') undo(); else redo();
+      e.preventDefault();
     } else {
       e.target.addEventListener('keyup', processSelectionWithTimeout, { once: true });
     }
   }
 
   function handleChange(e: ChangeEvent<HTMLDivElement>) {
+    Editor.formatCorrector(e.currentTarget);
     const { innerHTML, textContent } = e.currentTarget;
 
+    record(innerHTML === SAFARI_BR ? '' : innerHTML);
     onUpdate(innerHTML === SAFARI_BR ? '' : innerHTML);
 
     // Reset focus on the input to remove any active styling when input is cleared
@@ -562,6 +579,20 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 
   const inputScrollerContentClass = buildClassName('input-scroller-content', isNeedPremium && 'is-need-premium');
 
+  const handleApplyFormattingOnSelected = useLastCallback((html: string) => {
+    if (!inputRef.current || !selectedRange) return;
+
+    const left = document.createRange(); const right = document.createRange();
+    left.selectNodeContents(inputRef.current); right.selectNodeContents(inputRef.current);
+    left.setEnd(selectedRange.startContainer, selectedRange.startOffset);
+    right.setStart(selectedRange.endContainer, selectedRange.endOffset);
+
+    const fmt = document.createElement('div'); fmt.innerHTML = html;
+    inputRef.current.replaceChildren(left.cloneContents(), ...fmt.children, right.cloneContents());
+
+    inputRef.current.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
   return (
     <div id={id} onClick={shouldSuppressFocus ? onSuppressedFocus : undefined} dir={lang.isRtl ? 'rtl' : undefined}>
       <div
@@ -636,6 +667,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         selectedRange={selectedRange}
         setSelectedRange={setSelectedRange}
         onClose={handleCloseTextFormatter}
+        onFormatting={handleApplyFormattingOnSelected}
       />
       {forcedPlaceholder && <span className="forced-placeholder">{renderText(forcedPlaceholder!)}</span>}
     </div>

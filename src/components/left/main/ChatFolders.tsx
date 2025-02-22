@@ -7,12 +7,12 @@ import { getActions, getGlobal, withGlobal } from '../../../global';
 import type { ApiChatFolder, ApiChatlistExportedInvite, ApiSession } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 import type { FolderEditDispatch } from '../../../hooks/reducers/useFoldersReducer';
-import type { LeftColumnContent, SettingsScreens } from '../../../types';
+import type { ISettings, LeftColumnContent, SettingsScreens } from '../../../types';
 import type { MenuItemContextAction } from '../../ui/ListItem';
 import type { TabWithProperties } from '../../ui/TabList';
 
 import { ALL_FOLDER_ID } from '../../../config';
-import { selectCanShareFolder, selectTabState } from '../../../global/selectors';
+import { selectCanShareFolder, selectTabState, selectTabsView } from '../../../global/selectors';
 import { selectCurrentLimit } from '../../../global/selectors/limits';
 import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
@@ -21,6 +21,7 @@ import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import { IS_TOUCH_ENV } from '../../../util/windowEnvironment';
 import { renderTextWithEntities } from '../../common/helpers/renderTextWithEntities';
 
+import useAppLayout from '../../../hooks/useAppLayout';
 import useDerivedState from '../../../hooks/useDerivedState';
 import { useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManager';
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -56,6 +57,7 @@ type StateProps = {
   archiveSettings: GlobalState['archiveSettings'];
   isStoryRibbonShown?: boolean;
   sessions?: Record<string, ApiSession>;
+  tabsView: ISettings['tabsView'];
 };
 
 const SAVED_MESSAGES_HOTKEY = '0';
@@ -81,6 +83,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   archiveSettings,
   isStoryRibbonShown,
   sessions,
+  tabsView,
 }) => {
   const {
     loadChatFolders,
@@ -96,6 +99,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   const transitionRef = useRef<HTMLDivElement>(null);
 
   const lang = useLang();
+  const { isMobile } = useAppLayout();
 
   useEffect(() => {
     loadChatFolders();
@@ -340,15 +344,22 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
           tabs={folderTabs}
           activeTab={activeChatFolder}
           onSwitchTab={handleSwitchTab}
+          className={buildClassName(tabsView === 'sidebar' && !isMobile ? 'squashed' : undefined)}
         />
       ) : shouldRenderPlaceholder ? (
         <div ref={placeholderRef} className="tabs-placeholder" />
       ) : undefined}
       <Transition
+        key={tabsView}
         ref={transitionRef}
-        name={shouldSkipHistoryAnimations ? 'none' : lang.isRtl ? 'slideOptimizedRtl' : 'slideOptimized'}
+        name={
+          shouldSkipHistoryAnimations ? 'none' : (
+            tabsView === 'top' ? (lang.isRtl ? 'slideOptimizedRtl' : 'slideOptimized') : 'fade'
+          )
+        }
         activeKey={activeChatFolder}
         renderCount={shouldRenderFolders ? folderTabs.length : undefined}
+        className="current-tab-transition"
       >
         {renderCurrentTab}
       </Transition>
@@ -395,6 +406,7 @@ export default memo(withGlobal<OwnProps>(
       maxFolders: selectCurrentLimit(global, 'dialogFilters'),
       maxFolderInvites: selectCurrentLimit(global, 'chatlistInvites'),
       maxChatLists: selectCurrentLimit(global, 'chatlistJoined'),
+      tabsView: selectTabsView(global),
       archiveSettings,
       isStoryRibbonShown,
       sessions,

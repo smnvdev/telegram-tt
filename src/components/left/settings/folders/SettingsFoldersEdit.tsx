@@ -1,10 +1,11 @@
 import type { FC } from '../../../../lib/teact/teact';
 import React, {
-  memo, useCallback, useEffect, useMemo, useState,
+  memo, useCallback, useEffect, useMemo, useRef,
+  useState,
 } from '../../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../../global';
 
-import type { ApiChatlistExportedInvite } from '../../../../api/types';
+import type { ApiChatlistExportedInvite, ApiSticker } from '../../../../api/types';
 import type {
   FolderEditDispatch,
   FoldersState,
@@ -18,19 +19,28 @@ import { findIntersectionWithSet } from '../../../../util/iteratees';
 import { MEMO_EMPTY_ARRAY } from '../../../../util/memo';
 import { CUSTOM_PEER_EXCLUDED_CHAT_TYPES, CUSTOM_PEER_INCLUDED_CHAT_TYPES } from '../../../../util/objects/customPeer';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
+import { REM } from '../../../common/helpers/mediaDimensions';
+import { renderFolderIcon } from '../../../common/helpers/renderFolderIcon';
 
 import { selectChatFilters } from '../../../../hooks/reducers/useFoldersReducer';
+import useFlag from '../../../../hooks/useFlag';
 import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useOldLang from '../../../../hooks/useOldLang';
 
 import AnimatedIcon from '../../../common/AnimatedIcon';
+import CustomEmojiPicker from '../../../common/CustomEmojiPicker';
 import GroupChatInfo from '../../../common/GroupChatInfo';
 import Icon from '../../../common/icons/Icon';
 import PrivateChatInfo from '../../../common/PrivateChatInfo';
+import Button from '../../../ui/Button';
 import FloatingActionButton from '../../../ui/FloatingActionButton';
 import InputText from '../../../ui/InputText';
 import ListItem from '../../../ui/ListItem';
+import Menu from '../../../ui/Menu';
+import Portal from '../../../ui/Portal';
 import Spinner from '../../../ui/Spinner';
+
+const FOLDER_ICON_EMOJI_SIZE = 2.25 * REM;
 
 type OwnProps = {
   state: FoldersState;
@@ -156,6 +166,23 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
     dispatch({ type: 'setTitle', payload: currentTarget.value.trim() });
   }, [dispatch]);
 
+  // eslint-disable-next-line no-null/no-null
+  const folderIconButtonRef = useRef<HTMLButtonElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const folderIconMenuRef = useRef<HTMLDivElement>(null);
+  const [isFolderIconPickerOpen, openFolderIconPicker, closeFolderIconPicker] = useFlag(false);
+  useEffect(() => {
+    const rect = folderIconButtonRef.current!.getBoundingClientRect();
+    folderIconMenuRef.current!.style.setProperty('--offset-right', `${rect.right}px`);
+    folderIconMenuRef.current!.style.setProperty('--offset-top', `${rect.top}px`);
+  }, [isFolderIconPickerOpen, folderIconButtonRef]);
+
+  const handleEmoticonSet = useCallback((sticker: ApiSticker) => {
+    if (sticker.isCustomEmoji) {
+      dispatch({ type: 'setCustomEmoticon', payload: { emoji: sticker.emoji, documentId: sticker.id } });
+    }
+  }, [dispatch]);
+
   const handleSubmit = useCallback(() => {
     dispatch({ type: 'setIsLoading', payload: true });
 
@@ -279,6 +306,10 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
     );
   }
 
+  const folderIcon = useMemo(() => renderFolderIcon(
+    state.folder.emoticon, state.folder.title.entities, FOLDER_ICON_EMOJI_SIZE,
+  ), [state.folder.emoticon, state.folder.title.entities]);
+
   return (
     <div className="settings-fab-wrapper">
       <div className="settings-content no-border custom-scroll">
@@ -296,13 +327,43 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
             </p>
           )}
 
-          <InputText
-            className="mb-0"
-            label={lang('FilterNameHint')}
-            value={state.folder.title.text}
-            onChange={handleChange}
-            error={state.error && state.error === ERROR_NO_TITLE ? ERROR_NO_TITLE : undefined}
-          />
+          <div id="FolderInput" className="settings-folders-title">
+            <InputText
+              className="mb-0"
+              label={lang('FilterNameHint')}
+              value={state.folder.title.text}
+              onChange={handleChange}
+              error={state.error && state.error === ERROR_NO_TITLE ? ERROR_NO_TITLE : undefined}
+            />
+
+            <Button
+              ref={folderIconButtonRef}
+              color="translucent"
+              className="FolderIconButton"
+              onClick={openFolderIconPicker}
+            >
+              { folderIcon }
+            </Button>
+            <Portal>
+              <Menu
+                ref={folderIconMenuRef}
+                isOpen={isFolderIconPickerOpen}
+                noCompact
+                positionX="left"
+                onClose={closeFolderIconPicker}
+                bubbleClassName="settings-folders-folder-icon-picker-modal"
+                autoClose
+              >
+                <CustomEmojiPicker
+                  idPrefix="status-emoji-set-"
+                  loadAndPlay={isFolderIconPickerOpen}
+                  isHidden={!isFolderIconPickerOpen}
+                  onCustomEmojiSelect={handleEmoticonSet}
+
+                />
+              </Menu>
+            </Portal>
+          </div>
         </div>
 
         {!isOnlyInvites && (

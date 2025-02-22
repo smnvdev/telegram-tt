@@ -26,6 +26,7 @@ import useSyncEffect from '../../hooks/useSyncEffect';
 import Transition from '../ui/Transition';
 import ArchivedChats from './ArchivedChats.async';
 import LeftMain from './main/LeftMain';
+import Sidebar from './main/Sidebar';
 import NewChat from './newChat/NewChat.async';
 import Settings from './settings/Settings.async';
 
@@ -546,20 +547,23 @@ function LeftColumn({
   }
 
   return (
-    <Transition
-      ref={ref}
-      name={shouldSkipHistoryAnimations ? 'none' : LAYERS_ANIMATION_NAME}
-      renderCount={RENDER_COUNT}
-      activeKey={contentType}
-      shouldCleanup
-      cleanupExceptionKey={ContentType.Main}
-      shouldWrap
-      wrapExceptionKey={ContentType.Main}
-      id="LeftColumn"
-      withSwipeControl
-    >
-      {renderContent}
-    </Transition>
+    <>
+      <Sidebar onContentChange={setContent} onReset={handleReset} />
+      <Transition
+        ref={ref}
+        name={shouldSkipHistoryAnimations ? 'none' : LAYERS_ANIMATION_NAME}
+        renderCount={RENDER_COUNT}
+        activeKey={contentType}
+        shouldCleanup
+        cleanupExceptionKey={ContentType.Main}
+        shouldWrap
+        wrapExceptionKey={ContentType.Main}
+        id="LeftColumn"
+        withSwipeControl
+      >
+        {renderContent}
+      </Transition>
+    </>
   );
 }
 

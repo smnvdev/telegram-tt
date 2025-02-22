@@ -2,7 +2,7 @@ import React, { memo, useMemo } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { GlobalState } from '../../../global/types';
-import type { AnimationLevel, ThemeKey } from '../../../types';
+import type { AnimationLevel, ISettings, ThemeKey } from '../../../types';
 
 import {
   ANIMATION_LEVEL_MAX,
@@ -20,7 +20,7 @@ import {
   INITIAL_PERFORMANCE_STATE_MID,
   INITIAL_PERFORMANCE_STATE_MIN,
 } from '../../../global/initialState';
-import { selectTabState, selectTheme } from '../../../global/selectors';
+import { selectTabState, selectTabsView, selectTheme } from '../../../global/selectors';
 import { getPromptInstall } from '../../../util/installPrompt';
 import { switchPermanentWebVersion } from '../../../util/permanentWebVersion';
 import { IS_ELECTRON } from '../../../util/windowEnvironment';
@@ -48,6 +48,7 @@ type StateProps = {
   theme: ThemeKey;
   canInstall?: boolean;
   attachBots: GlobalState['attachMenu']['bots'];
+  tabsView: ISettings['tabsView'];
 } & Pick<GlobalState, 'currentUserId' | 'archiveSettings'>;
 
 const LeftSideMenuItems = ({
@@ -55,6 +56,7 @@ const LeftSideMenuItems = ({
   archiveSettings,
   animationLevel,
   theme,
+  tabsView,
   canInstall,
   attachBots,
   onSelectArchived,
@@ -93,6 +95,13 @@ const LeftSideMenuItems = ({
 
     setSettingOption({ theme: newTheme });
     setSettingOption({ shouldUseSystemTheme: false });
+  });
+
+  const handleTabsViewToggle = useLastCallback((e: React.SyntheticEvent<HTMLElement>) => {
+    e.stopPropagation();
+    const newTabsView = tabsView === 'sidebar' ? 'top' : 'sidebar';
+
+    setSettingOption({ tabsView: newTabsView });
   });
 
   const handleAnimationLevelChange = useLastCallback((e: React.SyntheticEvent<HTMLElement>) => {
@@ -178,6 +187,18 @@ const LeftSideMenuItems = ({
         {oldLang('Settings')}
       </MenuItem>
       <MenuItem
+        icon="tabs-view"
+        onClick={handleTabsViewToggle}
+      >
+        <span className="menu-item-name">{oldLang('lng_menu_tabs_view')}</span>
+        <Switcher
+          id="tabs-view"
+          label={oldLang(tabsView === 'sidebar' ? 'lng_settings_tabs_view_at_top' : 'lng_settings_tabs_view_on_side')}
+          checked={tabsView === 'sidebar'}
+          noAnimation
+        />
+      </MenuItem>
+      <MenuItem
         icon="darkmode"
         onClick={handleDarkModeToggle}
       >
@@ -250,6 +271,7 @@ export default memo(withGlobal<OwnProps>(
     return {
       currentUserId,
       theme: selectTheme(global),
+      tabsView: selectTabsView(global),
       animationLevel,
       canInstall: Boolean(tabState.canInstall),
       archiveSettings,

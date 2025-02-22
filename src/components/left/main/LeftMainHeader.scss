@@ -3,6 +3,16 @@
 #LeftMainHeader {
   position: relative;
 
+  .gap {
+    margin-left: .5rem;
+  }
+
+  .hidden {
+    width: 0;
+    margin: 0;
+    padding: 0;
+  }
+
   .DropdownMenuFiller {
     width: 2.5rem;
     height: 2.5rem;

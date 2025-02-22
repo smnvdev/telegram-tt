@@ -18,6 +18,7 @@ import StarIcon from '../../common/icons/StarIcon';
 import CustomEmojiEffect from '../../common/reactions/CustomEmojiEffect';
 import Button from '../../ui/Button';
 import StatusPickerMenu from './StatusPickerMenu.async';
+import useContextMenuHandlers from "../../../hooks/useContextMenuHandlers";
 
 interface StateProps {
   emojiStatus?: ApiEmojiStatus;

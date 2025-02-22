@@ -1,6 +1,6 @@
 import { getGlobal } from '../../global';
 
-import type { ApiChatFolder } from '../../api/types';
+import {ApiChatFolder, ApiMessageEntityTypes} from '../../api/types';
 import type { IconName } from '../../types/icons';
 import type { Dispatch, StateReducer } from '../useReducer';
 
@@ -109,12 +109,12 @@ export type FoldersState = {
   error?: string;
   folderId?: number;
   chatFilter: string;
-  folder: Omit<ApiChatFolder, 'id' | 'description' | 'emoticon'>;
+  folder: Omit<ApiChatFolder, 'id' | 'description'>;
   includeFilters?: FolderIncludeFilters;
   excludeFilters?: FolderExcludeFilters;
 };
 export type FoldersActions = (
-  'setTitle' | 'saveFilters' | 'editFolder' | 'reset' | 'setChatFilter' | 'setIsLoading' | 'setError' |
+  'setTitle' | 'setEmoticon' | 'setCustomEmoticon' | 'saveFilters' | 'editFolder' | 'reset' | 'setChatFilter' | 'setIsLoading' | 'setError' |
   'editIncludeFilters' | 'editExcludeFilters' | 'setIncludeFilters' | 'setExcludeFilters' | 'setIsTouched' |
   'setFolderId' | 'setIsChatlist'
   );
@@ -141,6 +141,46 @@ const foldersReducer: StateReducer<FoldersState, FoldersActions> = (
         folder: {
           ...state.folder,
           title: { text: action.payload },
+        },
+        isTouched: true,
+      };
+    case 'setCustomEmoticon': {
+      const first = state.folder.title.entities?.find((entity) => entity.offset === 0 && entity.type === ApiMessageEntityTypes.CustomEmoji);
+
+      let text = state.folder.title.text;
+      let entities = state.folder.title.entities;
+
+      if (first !== undefined) {
+        text = text.slice(first.length).trim();
+        entities = entities?.filter((entity) => entity !== first) || [];
+      }
+
+      text = `${action.payload.emoji} ${text}`;
+      entities = [
+        {
+          type: ApiMessageEntityTypes.CustomEmoji,
+          offset: 0,
+          length: action.payload.emoji.length,
+          documentId: action.payload.documentId,
+        },
+        ...entities || [],
+      ];
+
+      return {
+        ...state,
+        folder: {
+          ...state.folder,
+          title: { text, entities },
+        },
+        isTouched: true,
+      };
+    }
+    case 'setEmoticon':
+      return {
+        ...state,
+        folder: {
+          ...state.folder,
+          emoticon: action.payload,
         },
         isTouched: true,
       };

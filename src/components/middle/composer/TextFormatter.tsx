@@ -31,6 +31,7 @@ export type OwnProps = {
   selectedRange?: Range;
   setSelectedRange: (range: Range) => void;
   onClose: () => void;
+  onFormatting: (content: string) => void;
 };
 
 interface ISelectedTextFormats {
@@ -40,6 +41,7 @@ interface ISelectedTextFormats {
   strikethrough?: boolean;
   monospace?: boolean;
   spoiler?: boolean;
+  quote?: boolean;
 }
 
 const TEXT_FORMAT_BY_TAG_NAME: Record<string, keyof ISelectedTextFormats> = {
@@ -51,6 +53,7 @@ const TEXT_FORMAT_BY_TAG_NAME: Record<string, keyof ISelectedTextFormats> = {
   DEL: 'strikethrough',
   CODE: 'monospace',
   SPAN: 'spoiler',
+  BLOCKQUOTE: 'quote',
 };
 const fragmentEl = document.createElement('div');
 
@@ -60,6 +63,7 @@ const TextFormatter: FC<OwnProps> = ({
   selectedRange,
   setSelectedRange,
   onClose,
+  onFormatting,
 }) => {
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
@@ -103,7 +107,7 @@ const TextFormatter: FC<OwnProps> = ({
     }
 
     const selectedFormats: ISelectedTextFormats = {};
-    let { parentElement } = selectedRange.commonAncestorContainer;
+    let parentElement = selectedRange.commonAncestorContainer as HTMLElement | null;
     while (parentElement && parentElement.id !== EDITABLE_INPUT_ID) {
       const textFormat = TEXT_FORMAT_BY_TAG_NAME[parentElement.tagName];
       if (textFormat) {
@@ -184,7 +188,122 @@ const TextFormatter: FC<OwnProps> = ({
     updateInputStyles();
   }
 
+  /**
+   * Разбивает текстовые узлы, если граница Range находится внутри узла.
+   */
+  function splitRangeBoundaries(range: Range) {
+    // Если начало выделения внутри текстового узла – разбиваем его.
+    if (range.startContainer.nodeType === Node.TEXT_NODE) {
+      const textNode = range.startContainer as Text;
+      if (range.startOffset > 0 && range.startOffset < textNode.length) {
+        // Разбиваем текстовый узел на две части.
+        textNode.splitText(range.startOffset);
+        // Перенастраиваем начало выделения на начало нового (второго) узла.
+        range.setStart(textNode.nextSibling!, 0);
+      }
+    }
+    // Аналогично для конца выделения.
+    if (range.endContainer.nodeType === Node.TEXT_NODE) {
+      const textNode = range.endContainer as Text;
+      if (range.endOffset > 0 && range.endOffset < textNode.length) {
+        textNode.splitText(range.endOffset);
+        // Здесь граница остается корректной, так как текущий текстовый узел теперь содержит текст до split.
+      }
+    }
+  }
+
+  /**
+   * Ищет ближайшего родителя для узла, у которого tagName совпадает (без учета регистра).
+   */
+  function getClosestAncestor(node: Node, tagName: string): HTMLElement | null {
+    let current: Node | null = node;
+    tagName = tagName.toLowerCase();
+    while (current) {
+      if (
+        current.nodeType === Node.ELEMENT_NODE &&
+        (current as HTMLElement).tagName.toLowerCase() === tagName
+      ) {
+        return current as HTMLElement;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
+
+  /**
+   * Убирает заданный формат (например, 'i') с выделенного диапазона.
+   * Если выделение находится внутри форматированного элемента, то элемент будет разделён на три части:
+   *  - Левая часть (до выделения) – остаётся с форматом,
+   *  - Выделение – без данного формата,
+   *  - Правая часть (после выделения) – остаётся с форматом.
+   *
+   * При этом вложенные форматы (например, <b>) остаются без изменений.
+   *
+   * @param selectedRange Выделенный диапазон (Range)
+   * @param tagName Имя тега, формат которого нужно убрать (например, "i")
+   */
+  function removeFormattingFromSelection(tagName: string) {
+    if (!selectedRange) return; // Если нет выделения – выходим.
+    // Находим ближайший родительский элемент с нужным тегом.
+    const formatEl = getClosestAncestor(selectedRange.startContainer, tagName);
+    if (!formatEl) return; // Если формат не найден – выходим.
+
+    // Подготовим границы выделения: если они находятся внутри текстовых узлов, то разобьем узлы.
+    splitRangeBoundaries(selectedRange);
+
+    // Создаем Range, охватывающий всё содержимое форматированного элемента.
+    const fullRange = document.createRange();
+    fullRange.selectNodeContents(formatEl);
+
+    // Создаем Range для левой части (до выделения).
+    const leftRange = document.createRange();
+    leftRange.setStart(fullRange.startContainer, fullRange.startOffset);
+    leftRange.setEnd(selectedRange.startContainer, selectedRange.startOffset);
+
+    // Создаем Range для правой части (после выделения).
+    const rightRange = document.createRange();
+    rightRange.setStart(selectedRange.endContainer, selectedRange.endOffset);
+    rightRange.setEnd(fullRange.endContainer, fullRange.endOffset);
+
+    // Извлекаем содержимое левой, выделенной и правой частей.
+    const leftFragment = leftRange.extractContents();
+    const selectedFragment = selectedRange.extractContents();
+    const rightFragment = rightRange.extractContents();
+
+    const parent = formatEl.parentNode;
+    if (!parent) return;
+
+    // Если левая часть не пустая – оборачиваем её в новый элемент с тем же тегом и атрибутами.
+    if (leftFragment.textContent?.trim()) {
+      const newLeft = formatEl.cloneNode(false) as HTMLElement;
+      newLeft.appendChild(leftFragment);
+      parent.insertBefore(newLeft, formatEl);
+    }
+
+    // Вставляем выделенный фрагмент (он остается без обертки удаляемого формата).
+    parent.insertBefore(selectedFragment, formatEl);
+
+    // Если правая часть не пустая – оборачиваем её в новый элемент.
+    if (rightFragment.textContent?.trim()) {
+      const newRight = formatEl.cloneNode(false) as HTMLElement;
+      newRight.appendChild(rightFragment);
+      if (formatEl.nextSibling) {
+        parent.insertBefore(newRight, formatEl.nextSibling);
+      } else {
+        parent.appendChild(newRight);
+      }
+    }
+
+    // Удаляем исходный форматированный элемент.
+    parent.removeChild(formatEl);
+  }
+
+
   function getFormatButtonClassName(key: keyof ISelectedTextFormats) {
+    // if (key === 'quote' && selectedTextFormats.quote) {
+    //   return 'active disabled';
+    // }
+
     if (selectedTextFormats[key]) {
       return 'active';
     }
@@ -318,6 +437,32 @@ const TextFormatter: FC<OwnProps> = ({
     onClose();
   });
 
+  const handleQuoteText = useLastCallback(() => {
+    if (selectedTextFormats.quote) {
+      if (!selectedRange) return;
+
+      let element = selectedRange.commonAncestorContainer as HTMLElement | null;
+      while (element && element.tagName !== 'BLOCKQUOTE') { element = element.parentElement; }
+
+      if (!selectedRange || !element || element.tagName !== 'BLOCKQUOTE') return;
+
+      selectedRange.selectNodeContents(element);
+      onFormatting(element.innerHTML);
+
+      setSelectedTextFormats((selectedFormats) => ({
+        ...selectedFormats,
+        quote: false,
+      }));
+
+      return;
+    }
+
+    const text = getSelectedText(false);
+    onFormatting(`<blockquote class="blockquote">${text}</blockquote>`);
+    // document.execCommand('insertHTML', false, `<blockquote class="blockquote">${text}</blockquote>`);
+    onClose();
+  });
+
   const handleLinkUrlConfirm = useLastCallback(() => {
     const formattedLinkUrl = (ensureProtocol(linkUrl) || '').split('%').map(encodeURI).join('%');
 
@@ -353,6 +498,7 @@ const TextFormatter: FC<OwnProps> = ({
       m: handleMonospaceText,
       s: handleStrikethroughText,
       p: handleSpoilerText,
+      q: handleQuoteText,
     };
 
     const handler = HANDLERS_BY_KEY[getKeyFromEvent(e)];
@@ -464,6 +610,14 @@ const TextFormatter: FC<OwnProps> = ({
           onClick={handleMonospaceText}
         >
           <Icon name="monospace" />
+        </Button>
+        <Button
+          color="translucent"
+          ariaLabel="Quote text"
+          className={getFormatButtonClassName('quote')}
+          onClick={handleQuoteText}
+        >
+          <Icon name="quote-text" />
         </Button>
         <div className="TextFormatter-divider" />
         <Button color="translucent" ariaLabel={lang('TextFormat.AddLinkTitle')} onClick={openLinkControl}>

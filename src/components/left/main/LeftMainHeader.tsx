@@ -17,7 +17,7 @@ import {
   selectCanSetPasscode,
   selectCurrentMessageList,
   selectIsCurrentUserPremium,
-  selectTabState,
+  selectTabState, selectTabsView,
   selectTheme,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
@@ -75,6 +75,7 @@ type StateProps =
     areChatsLoaded?: boolean;
     hasPasscode?: boolean;
     canSetPasscode?: boolean;
+    tabsView: ISettings['tabsView'];
   }
   & Pick<GlobalState, 'connectionState' | 'isSyncing' | 'isFetchingDifference'>;
 
@@ -101,6 +102,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
   areChatsLoaded,
   hasPasscode,
   canSetPasscode,
+  tabsView,
   onSearchQuery,
   onSelectSettings,
   onSelectContacts,
@@ -163,7 +165,11 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
         ripple={hasMenu && !isMobile}
         size="smaller"
         color="translucent"
-        className={isOpen ? 'active' : ''}
+        className={buildClassName(
+          isOpen ? 'active' : '',
+          tabsView === 'sidebar' && !hasMenu && 'gap',
+          tabsView === 'sidebar' && hasMenu && !isMobile && 'hidden',
+        )}
         // eslint-disable-next-line react/jsx-no-bind
         onClick={hasMenu ? onTrigger : () => onReset()}
         ariaLabel={hasMenu ? oldLang('AccDescrOpenMenu2') : 'Return to chat list'}
@@ -176,7 +182,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
         />
       </Button>
     );
-  }, [hasMenu, isMobile, oldLang, onReset, shouldSkipTransition]);
+  }, [hasMenu, isMobile, oldLang, onReset, shouldSkipTransition, tabsView]);
 
   const handleSearchFocus = useLastCallback(() => {
     if (!searchQuery) {
@@ -356,6 +362,7 @@ export default memo(withGlobal<OwnProps>(
       areChatsLoaded: Boolean(global.chats.listIds.active),
       hasPasscode: Boolean(global.passcode.hasPasscode),
       canSetPasscode: selectCanSetPasscode(global),
+      tabsView: selectTabsView(global),
     };
   },
 )(LeftMainHeader));

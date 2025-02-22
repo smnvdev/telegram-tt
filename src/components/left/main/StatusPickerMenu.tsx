@@ -39,10 +39,11 @@ const StatusPickerMenu: FC<OwnProps & StateProps> = ({
 }) => {
   const { loadFeaturedEmojiStickers } = getActions();
 
-  const transformOriginX = useRef<number>();
+  // eslint-disable-next-line no-null/no-null
+  const ref = useRef<HTMLDivElement>(null);
   const [isContextMenuShown, markContextMenuShown, unmarkContextMenuShown] = useFlag();
   useEffect(() => {
-    transformOriginX.current = statusButtonRef.current!.getBoundingClientRect().right;
+    ref.current!.style.setProperty('--offset-right', `${statusButtonRef.current!.getBoundingClientRect().right}px`);
   }, [isOpen, statusButtonRef]);
 
   useEffect(() => {
@@ -59,12 +60,12 @@ const StatusPickerMenu: FC<OwnProps & StateProps> = ({
   return (
     <Portal>
       <Menu
+        ref={ref}
         isOpen={isOpen}
         noCompact
-        positionX="right"
+        positionX="left"
         bubbleClassName={styles.menuContent}
         onClose={onClose}
-        transformOriginX={transformOriginX.current}
         noCloseOnBackdrop={isContextMenuShown}
       >
         <CustomEmojiPicker

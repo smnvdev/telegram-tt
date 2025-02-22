@@ -41,11 +41,29 @@
       opacity: 0.25;
     }
 
+    .TabList {
+      max-height: 2.75rem;
+      transition: max-height var(--slide-transition);
+
+      .Tab {
+        opacity: 1;
+        transition: opacity var(--layer-transition);;
+      }
+
+      &.squashed {
+        max-height: 2px;
+
+        .Tab {
+          opacity: 0;
+        }
+      }
+    }
+
     .Tab {
       flex: 0 0 auto;
     }
 
-    > .Transition {
+    .current-tab-transition {
       flex: 1;
       overflow: hidden;
     }
